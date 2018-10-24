@@ -36,6 +36,13 @@ typedef struct fast_template_context {
     fast_template_free_func free_func;
 } FastTemplateContext;
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern string_t fast_template_empty_string;
+
 int fast_template_init(FastTemplateContext *context,
         const char *filename, void *args,
         fast_template_alloc_func alloc_func,
@@ -73,5 +80,15 @@ static inline int fast_template_render_by_htable(FastTemplateContext *context,
     return fast_template_render(context, params, params->item_count * 16,
             (fast_template_find_param_func)hash_find1, output);
 }
+
+static inline void fast_template_set_args(FastTemplateContext *context,
+        void *args)
+{
+    context->args = args;
+}
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

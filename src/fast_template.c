@@ -8,7 +8,7 @@
 #include "fastcommon/shared_func.h"
 #include "fast_template.h"
 
-static string_t empty_string = {NULL, 0};
+string_t fast_template_empty_string = {NULL, 0};
 
 static int check_alloc_index_node_array(FastTemplateContext *context)
 {
@@ -354,7 +354,7 @@ int fast_template_render(FastTemplateContext *context,
             {
                 html_format = true;
             } else {
-                value = &empty_string;
+                value = &fast_template_empty_string;
                 html_format = false;
             }
         }
