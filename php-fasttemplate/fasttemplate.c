@@ -144,7 +144,7 @@ static int hashtable_find(HashTable *ht, const string_t *key, string_t *value)
     zval *v;
     static char buff[32];
 
-    if (zend_hash_find_wrapper(ht, key->str, key->len, &v) == SUCCESS) {
+    if (zend_hash_find_wrapper(ht, key->str, key->len + 1, &v) == SUCCESS) {
         if (ZEND_TYPE_OF(v) == IS_STRING) {
             value->str = Z_STRVAL_P(v);
             value->len = Z_STRLEN_P(v);
@@ -211,15 +211,13 @@ ZEND_FUNCTION(fasttemplate_render)
 	ht = Z_ARRVAL_P(params);
     total_value_len = zend_hash_num_elements(ht) * 64;
 
-    logInfo("element count: %d", zend_hash_num_elements(ht));
+    //logInfo("element count: %d", zend_hash_num_elements(ht));
     if (template_manager_render(&context, &template_filename, ht,
             total_value_len, (fast_template_find_param_func)hashtable_find,
             &output) != 0)
     {
         RETURN_BOOL(false);
     }
-
-        ZEND_RETURN_STRINGL(output.str, output.len, 1);
 
 #if PHP_MAJOR_VERSION < 7
     INIT_ZVAL(return_value);
