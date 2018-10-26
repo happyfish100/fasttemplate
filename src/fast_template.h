@@ -14,7 +14,7 @@ typedef void * (*fast_template_alloc_func)(void *args, size_t size);
 typedef void (*fast_template_free_func)(void *args, void *ptr);
 
 typedef int (*fast_template_find_param_func)(void *args,
-        const string_t *name, string_t *value);
+        const string_t *key, string_t *value);
 
 typedef struct template_node {
     int type;
