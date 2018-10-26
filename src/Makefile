@@ -5,9 +5,9 @@ INC_PATH = -I/usr/include -I/usr/local/include
 LIB_PATH =  -lfastcommon 
 TARGET_LIB = /usr/local/lib
 
-ALL_HEADERS = fast_template.h
+ALL_HEADERS = fast_template.h template_manager.h
 
-SHARED_OBJS = fast_template.lo
+SHARED_OBJS = fast_template.lo template_manager.lo
 
 ALL_OBJS = $(SHARED_OBJS)
 
