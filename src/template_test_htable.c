@@ -3,6 +3,7 @@
 #include <string.h>
 #include <errno.h>
 #include "fastcommon/logger.h"
+#include "fastcommon/local_ip_func.h"
 #include "fast_template.h"
 
 void * template_alloc_func(void *args, size_t size)
@@ -15,12 +16,15 @@ void template_free_func(void *args, void *ptr)
     free(ptr);
 }
 
+#define HASH_INSERT_STRING_KV(hash, key, value) \
+    hash_insert_ex(hash, key, strlen(key), value, strlen(value), false)
+
 int main(int argc, char *argv[])
 {
     FastTemplateContext context;
-    key_value_array_t kv_array;
-    key_value_pair_t vars[16];
+    HashArray htable;
     const char *filename;
+    char *local_ip;
     string_t output;
     int result;
 
@@ -31,6 +35,10 @@ int main(int argc, char *argv[])
     filename = argv[1];
 
     log_init();
+    if ((result=hash_init(&htable, simple_hash, 64, 1.0)) != 0) {
+        return result;
+    }
+
     if ((result=fast_template_init(&context,
                     filename, NULL,
                     template_alloc_func,
@@ -39,15 +47,14 @@ int main(int argc, char *argv[])
         return result;
     }
 
-    FC_SET_STRING(vars[0].key, "question");
-    FC_SET_STRING(vars[0].value, "this is a test.");
-    FC_SET_STRING(vars[1].key, "server_ip");
-    FC_SET_STRING(vars[1].value, "127.0.0.1");
-    kv_array.kv_pairs = vars;
-    kv_array.count = 2;
+    local_ip = (char *)get_first_local_ip();
 
-    if ((result=fast_template_render_by_karray(&context,
-                    &kv_array, &output)) != 0)
+    HASH_INSERT_STRING_KV(&htable, "question", "this is a question.");
+    HASH_INSERT_STRING_KV(&htable, "server_ip", local_ip);
+    HASH_INSERT_STRING_KV(&htable, "answer", "this is an answer.");
+
+    if ((result=fast_template_render_by_htable(&context,
+                    &htable, &output)) != 0)
     {
         printf("result: %d\n", result);
         return result;
@@ -56,5 +63,7 @@ int main(int argc, char *argv[])
     printf("output: %.*s\n", output.len, output.str);
     free(output.str);
     fast_template_destroy(&context);
+    hash_destroy(&htable);
+
     return 0;
 }

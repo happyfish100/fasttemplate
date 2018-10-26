@@ -311,8 +311,8 @@ static char *text_to_html(FastTemplateContext *context, const string_t *value,
     return dest;
 }
 
-const string_t *find_value_from_kv_array(const key_value_array_t *params,
-        const string_t *key)
+int find_value_from_kv_array(const key_value_array_t *params,
+        const string_t *key, string_t *value)
 {
     const key_value_pair_t *kv;
     const key_value_pair_t *kv_end;
@@ -320,10 +320,11 @@ const string_t *find_value_from_kv_array(const key_value_array_t *params,
     kv_end = params->kv_pairs + params->count;
     for (kv=params->kv_pairs; kv<kv_end; kv++) {
         if (fc_string_equal(key, &kv->key)) {
-            return &kv->value;
+            *value = kv->value;
+            return 0;
         }
     }
-    return NULL;
+    return ENOENT;
 }
 
 int fast_template_render(FastTemplateContext *context,
@@ -333,7 +334,8 @@ int fast_template_render(FastTemplateContext *context,
     int i;
     int result;
     BufferInfo buffer;
-    const string_t *value;
+    string_t *value;
+    string_t v;
     char *p;
     bool html_format;
 
@@ -349,8 +351,9 @@ int fast_template_render(FastTemplateContext *context,
             value = &context->node_array.nodes[i].value;
             html_format = false;
         } else {
-            if ((value=find_func(params, &context->node_array.nodes[i].value))
-                    != NULL)
+            value = &v;
+            if (find_func(params, &context->node_array.nodes[i].value, value)
+                    == 0)
             {
                 html_format = true;
             } else {

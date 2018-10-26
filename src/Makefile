@@ -13,7 +13,9 @@ ALL_OBJS = $(SHARED_OBJS)
 
 ALL_LIBS = libfasttemplate.so
 
-all: $(ALL_OBJS) $(ALL_LIBS) template_test
+ALL_PRGS = template_test_kv template_test_htable
+
+all: $(ALL_OBJS) $(ALL_LIBS) $(ALL_PRGS)
 
 libfasttemplate.so: $(SHARED_OBJS)
 	cc -shared -o $@ $^ $(LIB_PATH)

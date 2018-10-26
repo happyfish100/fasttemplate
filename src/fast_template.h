@@ -13,8 +13,8 @@
 typedef void * (*fast_template_alloc_func)(void *args, size_t size);
 typedef void (*fast_template_free_func)(void *args, void *ptr);
 
-typedef const string_t * (*fast_template_find_param_func)(void *args,
-        const string_t *name);
+typedef int (*fast_template_find_param_func)(void *args,
+        const string_t *name, string_t *value);
 
 typedef struct template_node {
     int type;
@@ -54,8 +54,8 @@ int fast_template_render(FastTemplateContext *context,
         void *params, const int total_value_len,
         fast_template_find_param_func find_func, string_t *output);
 
-const string_t *find_value_from_kv_array(const key_value_array_t *params,
-        const string_t *key);
+int find_value_from_kv_array(const key_value_array_t *params,
+        const string_t *key, string_t *value);
 
 static inline int fast_template_render_by_karray(FastTemplateContext *context,
         key_value_array_t *params, string_t *output)
@@ -78,7 +78,7 @@ static inline int fast_template_render_by_htable(FastTemplateContext *context,
         HashArray *params, string_t *output)
 {
     return fast_template_render(context, params, params->item_count * 16,
-            (fast_template_find_param_func)hash_find1, output);
+            (fast_template_find_param_func)hash_find2, output);
 }
 
 static inline void fast_template_set_args(FastTemplateContext *context,
