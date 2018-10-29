@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #include "fastcommon/logger.h"
 #include "fastcommon/shared_func.h"
+#include "fastcommon/fast_buffer.h"
 #include "fast_template.h"
 
 string_t fast_template_empty_string = {NULL, 0};
@@ -87,6 +88,150 @@ static bool is_variable(const string_t *value)
     return true;
 }
 
+static int fast_template_include_file(FastTemplateContext *context,
+        char *file_part, char *end, FastBuffer *buffer)
+{
+    int result;
+    char *p;
+    char *l;
+    string_t filename;
+    char buff[MAX_PATH_SIZE];
+    char full_filename[MAX_PATH_SIZE];
+
+    p = file_part;
+    while (p < end && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) {
+        p++;
+    }
+
+    l = end - 1;
+    while (l >= file_part && (*l == ' ' || *l == '\t' || *l == '\r' || *l == '\n')) {
+        l--;
+    }
+
+    if (*p == '\'' || *p == '"') {
+        if (l == p) {
+            logWarning("file: "__FILE__", line: %d, "
+                    "expect closed quote char %c",
+                    __LINE__, *p);
+            return 0;
+        }
+        if (*l != *p) {
+            logWarning("file: "__FILE__", line: %d, "
+                    "expect closed quote char %c, but %c ocurs",
+                    __LINE__, *p, *l);
+            return 0;
+        }
+        filename.str = p + 1;
+        filename.len = l - filename.str;
+    } else {
+        filename.str = p;
+        filename.len = (l + 1) - filename.str;
+    }
+
+    if (filename.len == 0) {
+        logWarning("file: "__FILE__", line: %d, "
+                "filename is empty!", __LINE__);
+        return 0;
+    }
+
+    snprintf(buff, sizeof(buff), "%.*s", filename.len, filename.str);
+    resolve_path(context->filename, buff, full_filename, sizeof(full_filename));
+    logInfo("full_filename: %s", full_filename);
+
+    if ((result=fast_buffer_append_file(buffer, full_filename)) != 0) {
+        if (result == ENOENT) {   //ignore if file not exist
+            return 0;
+        } else {
+            return -1 * result;
+        }
+    }
+
+    return 1;  //include file done
+}
+
+static int do_preprocess(FastTemplateContext *context, int *include_count)
+{
+#define INCLUDE_MARK_START_STR "@include("
+#define INCLUDE_MARK_START_LEN (sizeof(INCLUDE_MARK_START_STR) - 1)
+
+    FastBuffer buffer;
+    char *inc_start;
+    char *inc_end;
+    char *text_start;
+    char *filename;
+    char *p;
+    int result;
+
+    *include_count = 0;
+    if ((inc_start=strstr(context->file_content.str,
+                    INCLUDE_MARK_START_STR)) == NULL)
+    {
+        return 0;
+    }
+
+    if ((result=fast_buffer_init_ex(&buffer, context->file_content.len)) != 0) {
+        return result;
+    }
+
+    text_start = context->file_content.str;
+    while (inc_start != NULL) {
+        filename = inc_start + INCLUDE_MARK_START_LEN;
+        if ((inc_end=strchr(filename, ')')) == NULL) {
+            break;
+        }
+
+        if ((result=fast_buffer_append_buff(&buffer, text_start,
+                        inc_start - text_start)) != 0)
+        {
+            break;
+        }
+
+        result = fast_template_include_file(context,
+                filename, inc_end, &buffer);
+        if (result < 0) {   //error
+            result *= -1;
+            break;
+        } else if (result > 0) {  //success include
+            text_start = inc_end + 1;
+            result = 0;
+            (*include_count)++;
+        } else {  //do NOT include, keep it
+            text_start = inc_start;
+        }
+
+        p = inc_end + 1;
+        inc_start = strstr(p, INCLUDE_MARK_START_STR);
+    }
+
+    if (result == 0) {
+        if ((result=fast_buffer_append_buff(&buffer, text_start,
+                        (context->file_content.str + context->file_content.len)
+                        - text_start)) == 0)
+        {
+            free(context->file_content.str);
+            context->file_content.str = fc_strdup(buffer.data, buffer.length);
+            context->file_content.len = buffer.length;
+        }
+    }
+    fast_buffer_destroy(&buffer);
+
+    return result;
+}
+
+static int fast_template_preprocess(FastTemplateContext *context)
+{
+    int result;
+    int include_count;
+
+    do {
+        if ((result=do_preprocess(context, &include_count)) != 0) {
+            return result;
+        }
+    } while (include_count > 0);
+
+    return 0;
+}
+
 static int fast_template_parse(FastTemplateContext *context)
 {
 #define VARIABLE_MARK_START_STR "${"
@@ -151,6 +296,12 @@ static int fast_template_load(FastTemplateContext *context)
         return result;
     }
     context->file_content.len = file_size;
+
+    if ((result=fast_template_preprocess(context)) != 0) {
+        free(context->file_content.str);
+        FC_SET_STRING_NULL(context->file_content);
+        return result;
+    }
     return fast_template_parse(context);
 }
 
