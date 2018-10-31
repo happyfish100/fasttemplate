@@ -307,18 +307,24 @@ static int fast_template_load(FastTemplateContext *context)
 int fast_template_init(FastTemplateContext *context,
         const char *filename, void *args,
         fast_template_alloc_func alloc_func,
-        fast_template_free_func free_func)
+        fast_template_free_func free_func,
+        const bool text2html)
 {
     memset(context, 0, sizeof(FastTemplateContext));
     context->args = args;
     context->alloc_func = alloc_func;
     context->free_func = free_func;
     context->filename = strdup(filename);
+    context->text2html = text2html;
     return fast_template_load(context);
 }
 
 void fast_template_destroy(FastTemplateContext *context)
 {
+    if (context->filename != NULL) {
+        free(context->filename);
+        context->filename = NULL;
+    }
     if (context->file_content.str != NULL) {
         free(context->file_content.str);
         context->file_content.str = NULL;

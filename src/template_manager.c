@@ -53,7 +53,8 @@ int template_manager_render(TemplateManagerContext *context,
 
         if ((result=fast_template_init(template_context,
                         template_filename->str, context->args,
-                        context->alloc_func, context->free_func)) != 0)
+                        context->alloc_func, context->free_func,
+                        text2html)) != 0)
         {
             return result;
         }
