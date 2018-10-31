@@ -30,7 +30,7 @@ void template_manager_destroy(TemplateManagerContext *context);
 
 int template_manager_render(TemplateManagerContext *context,
         const string_t *template_filename,
-        void *params, const int total_value_len,
+        void *params, const int total_value_len, const bool text2html,
         fast_template_find_param_func find_func, string_t *output);
 
 #ifdef __cplusplus

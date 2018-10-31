@@ -166,8 +166,8 @@ static int hashtable_find(HashTable *ht, const string_t *key, string_t *value)
             value->len = 0;
         } else {
             logError("file: "__FILE__", line: %d, "
-                "key \"%s\" is invalid, zend type: %d!",
-                __LINE__, key->str, ZEND_TYPE_OF(v));
+                "key \"%.*s\" is invalid, zend type: %d!",
+                __LINE__, key->len, key->str, ZEND_TYPE_OF(v));
             value->str = buff;
             value->len = 0;
         }
@@ -186,6 +186,7 @@ ZEND_FUNCTION(fasttemplate_render)
 	HashTable *ht;
     string_t output;
     int total_value_len;
+    bool text2html;
 #if PHP_MAJOR_VERSION >= 7
     zend_string *sz_data;
     bool use_heap_data;
@@ -199,8 +200,9 @@ ZEND_FUNCTION(fasttemplate_render)
 		RETURN_BOOL(false);
 	}
 
-	if (zend_parse_parameters(argc TSRMLS_CC, "sa", &template_filename.str,
-                &filename_len, &params) == FAILURE)
+    text2html = true;
+	if (zend_parse_parameters(argc TSRMLS_CC, "sa|b", &template_filename.str,
+                &filename_len, &params, &text2html) == FAILURE)
     {
 		logError("file: "__FILE__", line: %d, "
 			"fasttemplate_render zend_parse_parameters fail!", __LINE__);
@@ -213,7 +215,8 @@ ZEND_FUNCTION(fasttemplate_render)
 
     //logInfo("element count: %d", zend_hash_num_elements(ht));
     if (template_manager_render(&context, &template_filename, ht,
-            total_value_len, (fast_template_find_param_func)hashtable_find,
+            total_value_len, text2html,
+            (fast_template_find_param_func)hashtable_find,
             &output) != 0)
     {
         RETURN_BOOL(false);

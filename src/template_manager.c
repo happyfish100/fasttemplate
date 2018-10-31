@@ -33,7 +33,7 @@ void template_manager_destroy(TemplateManagerContext *context)
 
 int template_manager_render(TemplateManagerContext *context,
         const string_t *template_filename,
-        void *params, const int total_value_len,
+        void *params, const int total_value_len, const bool text2html,
         fast_template_find_param_func find_func, string_t *output)
 {
     int result;
@@ -66,6 +66,6 @@ int template_manager_render(TemplateManagerContext *context,
         }
     }
 
-    return fast_template_render(template_context,
-            params, total_value_len, find_func, output);
+    return fast_template_render(template_context, params,
+            total_value_len, text2html, find_func, output);
 }

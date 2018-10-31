@@ -51,7 +51,7 @@ int fast_template_init(FastTemplateContext *context,
 void fast_template_destroy(FastTemplateContext *context);
 
 int fast_template_render(FastTemplateContext *context,
-        void *params, const int total_value_len,
+        void *params, const int total_value_len, const bool text2html,
         fast_template_find_param_func find_func, string_t *output);
 
 int find_value_from_kv_array(const key_value_array_t *params,
@@ -70,7 +70,7 @@ static inline int fast_template_render_by_karray(FastTemplateContext *context,
         total_value_len += 2 * kv->value.len;
     }
 
-    return fast_template_render(context, params, total_value_len,
+    return fast_template_render(context, params, total_value_len, true,
             (fast_template_find_param_func)find_value_from_kv_array, output);
 }
 
@@ -78,7 +78,7 @@ static inline int fast_template_render_by_htable(FastTemplateContext *context,
         HashArray *params, string_t *output)
 {
     return fast_template_render(context, params, params->item_count * 16,
-            (fast_template_find_param_func)hash_find2, output);
+            true, (fast_template_find_param_func)hash_find2, output);
 }
 
 static inline void fast_template_set_args(FastTemplateContext *context,

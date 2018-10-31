@@ -136,7 +136,6 @@ static int fast_template_include_file(FastTemplateContext *context,
 
     snprintf(buff, sizeof(buff), "%.*s", filename.len, filename.str);
     resolve_path(context->filename, buff, full_filename, sizeof(full_filename));
-    logInfo("full_filename: %s", full_filename);
 
     if ((result=fast_buffer_append_file(buffer, full_filename)) != 0) {
         if (result == ENOENT) {   //ignore if file not exist
@@ -479,7 +478,7 @@ int find_value_from_kv_array(const key_value_array_t *params,
 }
 
 int fast_template_render(FastTemplateContext *context,
-        void *params, const int total_value_len,
+        void *params, const int total_value_len, const bool text2html,
         fast_template_find_param_func find_func, string_t *output)
 {
     int i;
@@ -506,7 +505,7 @@ int fast_template_render(FastTemplateContext *context,
             if (find_func(params, &context->node_array.nodes[i].value, value)
                     == 0)
             {
-                html_format = true;
+                html_format = text2html;
             } else {
                 value = &fast_template_empty_string;
                 html_format = false;
