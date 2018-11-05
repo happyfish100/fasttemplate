@@ -185,7 +185,7 @@ ZEND_FUNCTION(fasttemplate_render)
 	zval *params;
 	HashTable *ht;
     string_t output;
-    int total_value_len;
+    long total_value_len;
     bool text2html;
 #if PHP_MAJOR_VERSION >= 7
     zend_string *sz_data;
@@ -201,8 +201,9 @@ ZEND_FUNCTION(fasttemplate_render)
 	}
 
     text2html = true;
-	if (zend_parse_parameters(argc TSRMLS_CC, "sa|b", &template_filename.str,
-                &filename_len, &params, &text2html) == FAILURE)
+    total_value_len = 0;
+	if (zend_parse_parameters(argc TSRMLS_CC, "sa|lb", &template_filename.str,
+                &filename_len, &params, &total_value_len, &text2html) == FAILURE)
     {
 		logError("file: "__FILE__", line: %d, "
 			"fasttemplate_render zend_parse_parameters fail!", __LINE__);
@@ -211,9 +212,14 @@ ZEND_FUNCTION(fasttemplate_render)
     template_filename.len = filename_len;
 
 	ht = Z_ARRVAL_P(params);
-    total_value_len = zend_hash_num_elements(ht) * 64;
+    if (total_value_len == 0) {
+        total_value_len = zend_hash_num_elements(ht) * 64;
+    }
 
-    //logInfo("element count: %d", zend_hash_num_elements(ht));
+    /*
+    logInfo("element count: %d, total_value_len: %ld",
+            (int)zend_hash_num_elements(ht), total_value_len);
+            */
     if (template_manager_render(&context, &template_filename, ht,
             total_value_len, text2html,
             (fast_template_find_param_func)hashtable_find,
