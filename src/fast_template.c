@@ -4,14 +4,16 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include "fastcommon/logger.h"
 #include "fastcommon/shared_func.h"
+#include "fastcommon/sched_thread.h"
 #include "fastcommon/fast_buffer.h"
 #include "fast_template.h"
 
 string_t fast_template_empty_string = {NULL, 0};
 
-static int check_alloc_index_node_array(FastTemplateContext *context)
+static int check_alloc_node_array(FastTemplateContext *context)
 {
     int bytes;
 
@@ -37,8 +39,33 @@ static int check_alloc_index_node_array(FastTemplateContext *context)
     return 0;
 }
 
+static int check_alloc_fileinfo_array(FastTemplateContext *context)
+{
+    int bytes;
 
-static int add_index_template_node(FastTemplateContext *context,
+    if (context->fileinfo_array.alloc > context->fileinfo_array.count) {
+        return 0;
+    }
+
+    if (context->fileinfo_array.alloc == 0) {
+        context->fileinfo_array.alloc = 2;
+    } else {
+        context->fileinfo_array.alloc *= 2;
+    }
+
+    bytes = sizeof(TemplateFileInfo) * context->fileinfo_array.alloc;
+    context->fileinfo_array.files = (TemplateFileInfo *)realloc(
+            context->fileinfo_array.files, bytes);
+    if (context->fileinfo_array.files == NULL) {
+        logError("file: "__FILE__", line: %d, "
+                "realloc %d bytes fail", __LINE__, bytes);
+        return ENOMEM;
+    }
+
+    return 0;
+}
+
+static int template_add_node(FastTemplateContext *context,
         const int type, string_t *value)
 {
     int result;
@@ -47,7 +74,7 @@ static int add_index_template_node(FastTemplateContext *context,
         return 0;
     }
 
-    if ((result=check_alloc_index_node_array(context)) != 0) {
+    if ((result=check_alloc_node_array(context)) != 0) {
         return result;
     }
 
@@ -55,14 +82,48 @@ static int add_index_template_node(FastTemplateContext *context,
     context->node_array.nodes[context->node_array.count].value = *value;
     context->node_array.count++;
     return 0;
+
+}
+static int template_add_file(FastTemplateContext *context,
+        const char *filename)
+{
+    int result;
+    TemplateFileInfo *fi;
+    char *dup_filename;
+    struct stat stat_buf;
+
+    if ((result=check_alloc_fileinfo_array(context)) != 0) {
+        return result;
+    }
+
+    if (stat(filename, &stat_buf) != 0) {
+        result = errno != 0 ? errno : ENOENT;
+        logError("file: "__FILE__", line: %d, "
+                "stat file %s fail, errno: %d, error info: %s",
+                __LINE__, filename, result, strerror(result));
+        return result;
+    }
+
+    fi = context->fileinfo_array.files + context->fileinfo_array.count;
+    dup_filename = strdup(filename);
+    if (dup_filename == NULL) {
+        logError("file: "__FILE__", line: %d, "
+                "strdup %s fail", __LINE__, filename);
+        return ENOMEM;
+    }
+
+    fi->filename = dup_filename;
+    fi->last_modified = stat_buf.st_mtime;
+    context->fileinfo_array.count++;
+    return 0;
 }
 
-static inline int add_index_template_node_ex(FastTemplateContext *context,
+static inline int template_add_node_ex(FastTemplateContext *context,
         const int type, char *str, const int len)
 {
     string_t value;
     FC_SET_STRING_EX(value, str, len);
-    return add_index_template_node(context, type, &value);
+    return template_add_node(context, type, &value);
 }
 
 static bool is_variable(const string_t *value)
@@ -145,6 +206,11 @@ static int fast_template_include_file(FastTemplateContext *context,
         }
     }
 
+    if (context->check_file_mtime) {
+        if ((result=template_add_file(context, full_filename)) != 0) {
+            return -1 * result;
+        }
+    }
     return 1;  //include file done
 }
 
@@ -265,13 +331,13 @@ static int fast_template_parse(FastTemplateContext *context)
             continue;
         }
 
-        if ((result=add_index_template_node_ex(context,
+        if ((result=template_add_node_ex(context,
                         FAST_TEMPLATE_NODE_TYPE_STRING,
                         text_start, var_start - text_start)) != 0)
         {
             return result;
         }
-        if ((result=add_index_template_node(context,
+        if ((result=template_add_node(context,
                         FAST_TEMPLATE_NODE_TYPE_VARIABLE, &var)) != 0)
         {
             return result;
@@ -280,7 +346,7 @@ static int fast_template_parse(FastTemplateContext *context)
         text_start = p = var_end + 1;
     }
 
-    return add_index_template_node_ex(context, FAST_TEMPLATE_NODE_TYPE_STRING,
+    return template_add_node_ex(context, FAST_TEMPLATE_NODE_TYPE_STRING,
             text_start, end - text_start);
 }
 
@@ -308,22 +374,40 @@ int fast_template_init(FastTemplateContext *context,
         const char *filename, void *args,
         fast_template_alloc_func alloc_func,
         fast_template_free_func free_func,
-        const bool text2html)
+        const bool text2html, const bool check_file_mtime)
 {
+    int result;
+
     memset(context, 0, sizeof(FastTemplateContext));
+    if ((result=template_add_file(context, filename)) != 0) {
+        return result;
+    }
+
     context->args = args;
     context->alloc_func = alloc_func;
     context->free_func = free_func;
-    context->filename = strdup(filename);
+    context->filename = context->fileinfo_array.files[0].filename;
     context->text2html = text2html;
-    return fast_template_load(context);
+    context->check_file_mtime = check_file_mtime;
+    result = fast_template_load(context);
+    if (context->check_file_mtime) {
+        context->last_check_file_time = get_current_time();
+    }
+    return result;
 }
 
 void fast_template_destroy(FastTemplateContext *context)
 {
-    if (context->filename != NULL) {
-        free(context->filename);
-        context->filename = NULL;
+    if (context->fileinfo_array.files != NULL) {
+        TemplateFileInfo *fi;
+        TemplateFileInfo *end;
+
+        end = context->fileinfo_array.files + context->fileinfo_array.count;
+        for (fi=context->fileinfo_array.files; fi<end; fi++) {
+            free(fi->filename);
+        }
+        free(context->fileinfo_array.files);
+        context->fileinfo_array.files = NULL;
     }
     if (context->file_content.str != NULL) {
         free(context->file_content.str);
@@ -546,4 +630,29 @@ int fast_template_render(FastTemplateContext *context,
     output->str = buffer.buff;
     output->len = buffer.length;
     return 0;
+}
+
+bool fast_template_file_modified(FastTemplateContext *context)
+{
+    TemplateFileInfo *fi;
+    TemplateFileInfo *end;
+    struct stat stat_buf;
+
+    end = context->fileinfo_array.files + context->fileinfo_array.count;
+    for (fi=context->fileinfo_array.files; fi<end; fi++) {
+        if (stat(fi->filename, &stat_buf) != 0) {
+            logError("file: "__FILE__", line: %d, "
+                    "stat file %s fail, errno: %d, error info: %s",
+                    __LINE__, fi->filename, errno, strerror(errno));
+            continue;
+        }
+
+        if (fi->last_modified != stat_buf.st_mtime) {
+            logInfo("file: "__FILE__", line: %d, "
+                    "file %s modified", __LINE__, fi->filename);
+            return true;
+        }
+    }
+
+    return false;
 }

@@ -45,10 +45,14 @@ int main(int argc, char *argv[])
     if ((result=fast_template_init(&context,
                     filename, NULL,
                     template_alloc_func,
-                    template_free_func, text2html)) != 0)
+                    template_free_func, text2html, true)) != 0)
     {
         return result;
     }
+
+    printf("template_file_modified: %d, template files: %d\n",
+            fast_template_file_modified(&context),
+            context.fileinfo_array.count);
 
     local_ip = (char *)get_first_local_ip();
     FC_SET_STRING(vars[0].key, "question");

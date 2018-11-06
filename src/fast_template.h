@@ -27,16 +27,29 @@ typedef struct template_node_array {
     int alloc;
 } TemplateNodeArray;
 
+typedef struct template_file_info {
+    char *filename;
+    time_t last_modified;
+} TemplateFileInfo;
+
+typedef struct template_fileinfo_array {
+    TemplateFileInfo *files;
+    int count;
+    int alloc;
+} TemplateFileInfoArray;
+
 typedef struct fast_template_context {
     char *filename;
     string_t file_content;
+    TemplateFileInfoArray fileinfo_array;
     TemplateNodeArray node_array;
     void *args;
     fast_template_alloc_func alloc_func;
     fast_template_free_func free_func;
     bool text2html;
+    bool check_file_mtime;
+    time_t last_check_file_time;
 } FastTemplateContext;
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,13 +61,15 @@ int fast_template_init(FastTemplateContext *context,
         const char *filename, void *args,
         fast_template_alloc_func alloc_func,
         fast_template_free_func free_func,
-        const bool text2html);
+        const bool text2html, const bool check_file_mtime);
 
 void fast_template_destroy(FastTemplateContext *context);
 
 int fast_template_render(FastTemplateContext *context,
         void *params, const int total_value_len, const bool text2html,
         fast_template_find_param_func find_func, string_t *output);
+
+bool fast_template_file_modified(FastTemplateContext *context);
 
 int find_value_from_kv_array(const key_value_array_t *params,
         const string_t *key, string_t *value);

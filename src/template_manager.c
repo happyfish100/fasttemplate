@@ -6,11 +6,13 @@
 #include <sys/time.h>
 #include "fastcommon/logger.h"
 #include "fastcommon/shared_func.h"
+#include "fastcommon/sched_thread.h"
 #include "template_manager.h"
 
 int template_manager_init(TemplateManagerContext *context, void *args,
         fast_template_alloc_func alloc_func,
-        fast_template_free_func free_func, const int init_capacity)
+        fast_template_free_func free_func, const int init_capacity,
+        const int reload_min_interval)
 {
     int result;
 
@@ -19,10 +21,11 @@ int template_manager_init(TemplateManagerContext *context, void *args,
     {
         return result;
     }
+    context->reload_min_interval = reload_min_interval;
     context->args = args;
     context->alloc_func = alloc_func;
     context->free_func = free_func;
-
+    context->need_reload = context->reload_min_interval >= 0;
     return 0;
 }
 
@@ -41,6 +44,26 @@ int template_manager_render(TemplateManagerContext *context,
 
     template_context = (FastTemplateContext *)hash_find1(
             &context->template_htable, template_filename);
+    if (template_context != NULL) {
+        if (context->need_reload) {
+            time_t current_time;
+            current_time = get_current_time();
+            if (current_time - template_context->
+                    last_check_file_time >= context->reload_min_interval) 
+            {
+                if (fast_template_file_modified(template_context)) {
+                    logInfo("file: "__FILE__", line: %d, "
+                            "template file: %s changed, realod it!", __LINE__,
+                            template_context->filename);
+                    fast_template_destroy(template_context);
+                    template_context = NULL;
+                } else {
+                    template_context->last_check_file_time = current_time;
+                }
+            }
+        }
+    }
+
     if (template_context == NULL) {
         template_context = (FastTemplateContext *)malloc(
                 sizeof(FastTemplateContext));
@@ -54,7 +77,7 @@ int template_manager_render(TemplateManagerContext *context,
         if ((result=fast_template_init(template_context,
                         template_filename->str, context->args,
                         context->alloc_func, context->free_func,
-                        text2html)) != 0)
+                        text2html, context->need_reload)) != 0)
         {
             return result;
         }

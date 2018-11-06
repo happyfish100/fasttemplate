@@ -11,11 +11,11 @@
 typedef struct template_manager_context {
     /* key: template filename, value: FastTemplateContext * */
     HashArray template_htable;
-
+    int reload_min_interval;
     void *args;
     fast_template_alloc_func alloc_func;
     fast_template_free_func free_func;
-
+    bool need_reload;
 } TemplateManagerContext;
 
 #ifdef __cplusplus
@@ -24,7 +24,8 @@ extern "C" {
 
 int template_manager_init(TemplateManagerContext *context, void *args,
         fast_template_alloc_func alloc_func,
-        fast_template_free_func free_func, const int init_capacity);
+        fast_template_free_func free_func, const int init_capacity,
+        const int reload_min_interval);
 
 void template_manager_destroy(TemplateManagerContext *context);
 

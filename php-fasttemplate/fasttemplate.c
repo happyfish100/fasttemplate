@@ -60,37 +60,56 @@ static void template_free_func(void *args, void *ptr)
     efree(ptr);
 }
 
-PHP_MINIT_FUNCTION(fasttemplate)
+static int get_int_config(string_t *name, const int default_value,
+        const int min_allowed)
 {
-#define ITEM_NAME_INIT_CAPACITY "fasttemplate.init_capacity"
     zval zv;
-    zval *zv_init_capacity;
-    int init_capacity;
+    zval *zv_value;
+    int value;
 
-    log_try_init();
-
-    zv_init_capacity = &zv;
-    if (zend_get_configuration_directive_wrapper(ITEM_NAME_INIT_CAPACITY,
-                sizeof(ITEM_NAME_INIT_CAPACITY), &zv_init_capacity) != SUCCESS)
+    zv_value = &zv;
+    if (zend_get_configuration_directive_wrapper(name->str,
+                name->len, &zv_value) != SUCCESS)
     {
-        init_capacity = 100;
+        value = default_value;
         fprintf(stderr, "file: "__FILE__", line: %d, "
                 "fasttemplate.ini does not have item "
                 "\"%s\", set to %d!\n", __LINE__,
-                ITEM_NAME_INIT_CAPACITY, init_capacity);
+                name->str, value);
     } else {
-        init_capacity = atoi(Z_STRVAL_P(zv_init_capacity));
-        if (init_capacity <= 0) {
-            init_capacity = 100;
+        value = atoi(Z_STRVAL_P(zv_value));
+        if (value < min_allowed) {
+            value = default_value;
             fprintf(stderr, "file: "__FILE__", line: %d, "
                     "fasttemplate.ini, item: \"%s\" is invalid, "
-                    "set to %d!\n", __LINE__,
-                    ITEM_NAME_INIT_CAPACITY, init_capacity);
+                    "set to %d!\n", __LINE__, name->str, value);
         }
     }
 
+    return value;
+}
+
+PHP_MINIT_FUNCTION(fasttemplate)
+{
+#define ITEM_NAME_INIT_CAPACITY       "fasttemplate.init_capacity"
+#define ITEM_NAME_RELOAD_MIN_INTERVAL "fasttemplate.reload_min_interval"
+
+    string_t capacity_name;
+    string_t interval_name;
+    int init_capacity;
+    int reload_min_interval;
+
+    FC_SET_STRING_EX(capacity_name, ITEM_NAME_INIT_CAPACITY,
+            sizeof(ITEM_NAME_INIT_CAPACITY));
+    init_capacity = get_int_config(&capacity_name, 100, 1);
+
+    FC_SET_STRING_EX(interval_name, ITEM_NAME_RELOAD_MIN_INTERVAL,
+            sizeof(ITEM_NAME_RELOAD_MIN_INTERVAL));
+    reload_min_interval = get_int_config(&interval_name, -1, -1);
+
+    log_try_init();
     if (template_manager_init(&context, NULL, template_alloc_func,
-                template_free_func, init_capacity) == 0)
+                template_free_func, init_capacity, reload_min_interval) == 0)
     {
         return SUCCESS;
     } else {
