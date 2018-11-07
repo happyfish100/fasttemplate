@@ -19,6 +19,7 @@ PHP_MINFO_FUNCTION(fasttemplate);
 
 ZEND_FUNCTION(fasttemplate_version);
 ZEND_FUNCTION(fasttemplate_render);
+ZEND_FUNCTION(fasttemplate_text2html);
 
 #ifdef __cplusplus
 }

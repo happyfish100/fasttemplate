@@ -8,7 +8,6 @@
 #include "fastcommon/logger.h"
 #include "fastcommon/shared_func.h"
 #include "fastcommon/sched_thread.h"
-#include "fastcommon/fast_buffer.h"
 #include "fast_template.h"
 
 string_t fast_template_empty_string = {NULL, 0};
@@ -22,7 +21,7 @@ static int check_alloc_node_array(FastTemplateContext *context)
     }
 
     if (context->node_array.alloc == 0) {
-        context->node_array.alloc = 2;
+        context->node_array.alloc = 32;
     } else {
         context->node_array.alloc *= 2;
     }
@@ -48,7 +47,7 @@ static int check_alloc_fileinfo_array(FastTemplateContext *context)
     }
 
     if (context->fileinfo_array.alloc == 0) {
-        context->fileinfo_array.alloc = 2;
+        context->fileinfo_array.alloc = 8;
     } else {
         context->fileinfo_array.alloc *= 2;
     }
@@ -370,6 +369,16 @@ static int fast_template_load(FastTemplateContext *context)
     return fast_template_parse(context);
 }
 
+void fast_template_memory_manager_init(
+        FastTemplateMemoryManager *memory_manager,
+        void *args, fast_template_alloc_func alloc_func,
+        fast_template_free_func free_func)
+{
+    memory_manager->args = args;
+    memory_manager->alloc_func = alloc_func;
+    memory_manager->free_func = free_func;
+}
+
 int fast_template_init(FastTemplateContext *context,
         const char *filename, void *args,
         fast_template_alloc_func alloc_func,
@@ -383,9 +392,8 @@ int fast_template_init(FastTemplateContext *context,
         return result;
     }
 
-    context->args = args;
-    context->alloc_func = alloc_func;
-    context->free_func = free_func;
+    fast_template_memory_manager_init(&context->memory_manager,
+            args, alloc_func, free_func);
     context->filename = context->fileinfo_array.files[0].filename;
     context->text2html = text2html;
     context->check_file_mtime = check_file_mtime;
@@ -420,12 +428,13 @@ void fast_template_destroy(FastTemplateContext *context)
     }
 }
 
-static int fast_template_alloc_output_buffer(FastTemplateContext *context,
-        const int total_value_len, BufferInfo *buffer)
+int fast_template_alloc_output_buffer(FastTemplateMemoryManager *
+        memory_manager, BufferInfo *buffer, const int alloc_size)
 {
     buffer->length = 0;
-    buffer->alloc_size = context->file_content.len + total_value_len;
-    buffer->buff = (char *)context->alloc_func(context->args, buffer->alloc_size);
+    buffer->alloc_size = alloc_size;
+    buffer->buff = (char *)memory_manager->alloc_func(
+            memory_manager->args, buffer->alloc_size);
     if (buffer->buff == NULL) {
         logError("file: "__FILE__", line: %d, "
                 "alloc %d bytes fail", __LINE__, buffer->alloc_size);
@@ -435,8 +444,8 @@ static int fast_template_alloc_output_buffer(FastTemplateContext *context,
     return 0;
 }
 
-static int check_realloc_output_buffer(FastTemplateContext *context,
-        BufferInfo *buffer, const int inc_size)
+static int check_realloc_output_buffer(FastTemplateMemoryManager *
+        memory_manager, BufferInfo *buffer, const int inc_size)
 {
     char *new_buff;
     int expect_size;
@@ -452,7 +461,8 @@ static int check_realloc_output_buffer(FastTemplateContext *context,
     logInfo("expect_size: %d, resize buff size to %d",
             expect_size, buffer->alloc_size);
 
-    new_buff = (char *)context->alloc_func(context->args, buffer->alloc_size);
+    new_buff = (char *)memory_manager->alloc_func(memory_manager->args,
+            buffer->alloc_size);
     if (new_buff == NULL) {
         logError("file: "__FILE__", line: %d, "
                 "alloc %d bytes fail", __LINE__, buffer->alloc_size);
@@ -460,12 +470,13 @@ static int check_realloc_output_buffer(FastTemplateContext *context,
     }
 
     memcpy(new_buff, buffer->buff, buffer->length);
-    context->free_func(context->args, buffer->buff);
+    memory_manager->free_func(memory_manager->args, buffer->buff);
     buffer->buff = new_buff;
     return 0;
 }
 
-static char *text_to_html(FastTemplateContext *context, const string_t *value,
+char *fast_template_text2html(FastTemplateMemoryManager *
+        memory_manager, const string_t *value,
         BufferInfo *buffer)
 {
     const char *p;
@@ -481,7 +492,7 @@ static char *text_to_html(FastTemplateContext *context, const string_t *value,
     for (p=value->str; p<end; p++) {
         if (buff_end - dest < 8) {
             buffer->length = dest - buffer->buff;
-            if (check_realloc_output_buffer(context, buffer, 8) != 0) {
+            if (check_realloc_output_buffer(memory_manager, buffer, 8) != 0) {
                 return NULL;
             }
 
@@ -573,14 +584,16 @@ int fast_template_render(FastTemplateContext *context,
 {
     int i;
     int result;
+    int alloc_size;
     BufferInfo buffer;
     string_t *value;
     string_t v;
     char *p;
     bool html_format;
 
-    if ((result=fast_template_alloc_output_buffer(context,
-                    total_value_len, &buffer)) != 0)
+    alloc_size = context->file_content.len + total_value_len;
+    if ((result=fast_template_alloc_output_buffer(&context->memory_manager,
+                    &buffer, alloc_size)) != 0)
     {
         return result;
     }
@@ -605,15 +618,16 @@ int fast_template_render(FastTemplateContext *context,
         if (value->len > 0) {
             if (html_format) {
                 buffer.length = p - buffer.buff;
-                p = text_to_html(context, value, &buffer);
+                p = fast_template_text2html(&context->memory_manager,
+                        value, &buffer);
                 if (p == NULL) {
                     return ENOMEM;
                 }
             } else {
                 if ((p - buffer.buff) + value->len > buffer.alloc_size) {
                     buffer.length = p - buffer.buff;
-                    if (check_realloc_output_buffer(context, &buffer,
-                                value->len) != 0)
+                    if (check_realloc_output_buffer(&context->memory_manager,
+                                &buffer, value->len) != 0)
                     {
                         return ENOMEM;
                     }

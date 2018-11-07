@@ -17,6 +17,7 @@
 #define PATCH_VERSION  0
 
 static TemplateManagerContext context;
+static FastTemplateMemoryManager memory_manager;  //for text2html
 
 #if (PHP_MAJOR_VERSION == 5 && PHP_MINOR_VERSION < 3)
 const zend_fcall_info empty_fcall_info = { 0, NULL, NULL, NULL, NULL, 0, NULL, NULL, 0 };
@@ -30,6 +31,7 @@ const zend_fcall_info empty_fcall_info = { 0, NULL, NULL, NULL, NULL, 0, NULL, N
 	zend_function_entry fasttemplate_functions[] = {
 		ZEND_FE(fasttemplate_version, NULL)
 		ZEND_FE(fasttemplate_render, NULL)
+		ZEND_FE(fasttemplate_text2html, NULL)
 		{NULL, NULL, NULL}  /* Must be the last line */
 	};
 
@@ -108,6 +110,8 @@ PHP_MINIT_FUNCTION(fasttemplate)
     reload_min_interval = get_int_config(&interval_name, -1, -1);
 
     log_try_init();
+    fast_template_memory_manager_init(&memory_manager,
+            NULL, template_alloc_func, template_free_func);
     if (template_manager_init(&context, NULL, template_alloc_func,
                 template_free_func, init_capacity, reload_min_interval) == 0)
     {
@@ -253,6 +257,57 @@ ZEND_FUNCTION(fasttemplate_render)
 #else
     ZSTR_ALLOCA_INIT(sz_data, output.str, output.len, use_heap_data);
     efree(output.str);
+    RETVAL_NEW_STR(sz_data);
+#endif
+
+}
+
+ZEND_FUNCTION(fasttemplate_text2html)
+{
+	int argc;
+    string_t input;
+    zend_size_t input_len;
+    int alloc_size;
+    BufferInfo buffer;
+#if PHP_MAJOR_VERSION >= 7
+    zend_string *sz_data;
+    bool use_heap_data;
+#endif
+
+	argc = ZEND_NUM_ARGS();
+	if (argc != 1) {
+		logError("file: "__FILE__", line: %d, "
+			"fasttemplate_text2html need array parameter",
+			__LINE__);
+		RETURN_BOOL(false);
+	}
+
+	if (zend_parse_parameters(argc TSRMLS_CC, "s", &input.str,
+                &input_len) == FAILURE)
+    {
+		logError("file: "__FILE__", line: %d, "
+			"fasttemplate_text2html zend_parse_parameters fail!", __LINE__);
+		RETURN_BOOL(false);
+	}
+    input.len = input_len;
+
+    alloc_size = input.len * 2 + 2;
+    if (fast_template_alloc_output_buffer(&memory_manager,
+                &buffer, alloc_size) != 0) 
+    {
+		RETURN_BOOL(false);
+    }
+
+    if (fast_template_text2html(&memory_manager, &input, &buffer) == NULL) {
+		RETURN_BOOL(false);
+    }
+
+#if PHP_MAJOR_VERSION < 7
+    INIT_ZVAL(return_value);
+    ZVAL_STRINGL(&return_value, buffer.buff, buffer.length, 0);
+#else
+    ZSTR_ALLOCA_INIT(sz_data, buffer.buff, buffer.length, use_heap_data);
+    efree(buffer.buff);
     RETVAL_NEW_STR(sz_data);
 #endif
 
