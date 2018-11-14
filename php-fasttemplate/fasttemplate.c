@@ -9,7 +9,7 @@
 #include <time.h>
 #include "fastcommon/common_define.h"
 #include "fastcommon/logger.h"
-#include "template_manager.h"
+#include "fasttemplate/template_manager.h"
 #include "fasttemplate.h"
 
 #define MAJOR_VERSION  1
