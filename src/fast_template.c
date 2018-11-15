@@ -483,7 +483,7 @@ char *fast_template_text2html(FastTemplateMemoryManager *
     const char *end;
     char *dest;
     char *buff_end;
-    bool space_count;
+    int space_count;
 
     space_count = 0;
     dest = buffer->buff + buffer->length;
