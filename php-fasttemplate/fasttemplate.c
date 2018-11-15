@@ -268,6 +268,7 @@ ZEND_FUNCTION(fasttemplate_text2html)
     string_t input;
     zend_size_t input_len;
     int alloc_size;
+    int multiple;
     BufferInfo buffer;
 #if PHP_MAJOR_VERSION >= 7
     zend_string *sz_data;
@@ -291,7 +292,12 @@ ZEND_FUNCTION(fasttemplate_text2html)
 	}
     input.len = input_len;
 
-    alloc_size = input.len * 2 + 2;
+    if (input.len <= 16) {
+        multiple = 4;
+    } else {
+        multiple = 2;
+    }
+    alloc_size = input.len * multiple + 2;
     if (fast_template_alloc_output_buffer(&memory_manager,
                 &buffer, alloc_size) != 0) 
     {
