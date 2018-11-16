@@ -54,12 +54,12 @@ zend_module_entry fasttemplate_module_entry = {
 
 static void * template_alloc_func(void *args, size_t size)
 {
-    return emalloc(size);
+    return malloc(size);
 }
 
 static void template_free_func(void *args, void *ptr)
 {
-    efree(ptr);
+    free(ptr);
 }
 
 static int get_int_config(string_t *name, const int default_value,
