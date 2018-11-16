@@ -2,7 +2,7 @@
 
 COMPILE = $(CC)  -Wall -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -g -O1 -DDEBUG_FLAG -fPIC
 INC_PATH = -I/usr/include -I/usr/local/include
-LIB_PATH =  -lfastcommon 
+LIB_PATH =  -lfastcommon -lpthread
 TARGET_LIB = /usr/local/lib
 
 ALL_HEADERS = fast_template.h template_manager.h
