@@ -210,10 +210,6 @@ ZEND_FUNCTION(fasttemplate_render)
     string_t output;
     long total_value_len;
     bool text2html;
-#if PHP_MAJOR_VERSION >= 7
-    zend_string *sz_data;
-    bool use_heap_data;
-#endif
 
 	argc = ZEND_NUM_ARGS();
 	if (argc < 2) {
@@ -251,29 +247,17 @@ ZEND_FUNCTION(fasttemplate_render)
         RETURN_BOOL(false);
     }
 
-#if PHP_MAJOR_VERSION < 7
-    INIT_ZVAL(return_value);
-    ZVAL_STRINGL(&return_value, output.str, output.len, 0);
-#else
-    ZSTR_ALLOCA_INIT(sz_data, output.str, output.len, use_heap_data);
-    efree(output.str);
-    RETVAL_NEW_STR(sz_data);
-#endif
-
+    ZEND_RETURN_STRINGL(output.str, output.len, 1);
 }
 
 ZEND_FUNCTION(fasttemplate_text2html)
 {
 	int argc;
     string_t input;
+    string_t output;
     zend_size_t input_len;
     int alloc_size;
     int multiple;
-    BufferInfo buffer;
-#if PHP_MAJOR_VERSION >= 7
-    zend_string *sz_data;
-    bool use_heap_data;
-#endif
 
 	argc = ZEND_NUM_ARGS();
 	if (argc != 1) {
@@ -298,23 +282,15 @@ ZEND_FUNCTION(fasttemplate_text2html)
         multiple = 2;
     }
     alloc_size = input.len * multiple + 2;
-    if (fast_template_alloc_output_buffer(&memory_manager,
-                &buffer, alloc_size) != 0) 
+    if (fast_template_reset_realloc_buffer(&memory_manager,
+                alloc_size) != 0)
     {
 		RETURN_BOOL(false);
     }
 
-    if (fast_template_text2html(&memory_manager, &input, &buffer) == NULL) {
+    if (fast_template_text2html(&memory_manager, &input, &output) == NULL) {
 		RETURN_BOOL(false);
     }
 
-#if PHP_MAJOR_VERSION < 7
-    INIT_ZVAL(return_value);
-    ZVAL_STRINGL(&return_value, buffer.buff, buffer.length, 0);
-#else
-    ZSTR_ALLOCA_INIT(sz_data, buffer.buff, buffer.length, use_heap_data);
-    efree(buffer.buff);
-    RETVAL_NEW_STR(sz_data);
-#endif
-
+    ZEND_RETURN_STRINGL(output.str, output.len, 1);
 }

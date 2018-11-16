@@ -12,6 +12,9 @@
 
 string_t fast_template_empty_string = {NULL, 0};
 
+static int fast_template_alloc_output_buffer(FastTemplateMemoryManager *
+        memory_manager, const int alloc_size);
+
 static int check_alloc_node_array(FastTemplateContext *context)
 {
     int bytes;
@@ -369,7 +372,7 @@ static int fast_template_load(FastTemplateContext *context)
     return fast_template_parse(context);
 }
 
-void fast_template_memory_manager_init(
+int fast_template_memory_manager_init(
         FastTemplateMemoryManager *memory_manager,
         void *args, fast_template_alloc_func alloc_func,
         fast_template_free_func free_func)
@@ -377,6 +380,8 @@ void fast_template_memory_manager_init(
     memory_manager->args = args;
     memory_manager->alloc_func = alloc_func;
     memory_manager->free_func = free_func;
+
+    return fast_template_alloc_output_buffer(memory_manager, 4096);
 }
 
 int fast_template_init(FastTemplateContext *context,
@@ -428,9 +433,12 @@ void fast_template_destroy(FastTemplateContext *context)
     }
 }
 
-int fast_template_alloc_output_buffer(FastTemplateMemoryManager *
-        memory_manager, BufferInfo *buffer, const int alloc_size)
+static int fast_template_alloc_output_buffer(FastTemplateMemoryManager *
+        memory_manager, const int alloc_size)
 {
+    BufferInfo *buffer;
+    buffer = &memory_manager->buffer;
+
     buffer->length = 0;
     buffer->alloc_size = alloc_size;
     buffer->buff = (char *)memory_manager->alloc_func(
@@ -444,46 +452,64 @@ int fast_template_alloc_output_buffer(FastTemplateMemoryManager *
     return 0;
 }
 
-static int check_realloc_output_buffer(FastTemplateMemoryManager *
-        memory_manager, BufferInfo *buffer, const int inc_size)
+static int check_realloc_buffer(FastTemplateMemoryManager *
+        memory_manager, const int inc_size)
 {
+    BufferInfo *buffer;
     char *new_buff;
     int expect_size;
+    int alloc_size;
+
+    buffer = &memory_manager->buffer;
 
     expect_size = buffer->length + inc_size;
     if (buffer->alloc_size >= expect_size) {
         return 0;
     }
 
-    while (buffer->alloc_size < expect_size) {
-        buffer->alloc_size *= 2;
+    alloc_size = buffer->alloc_size;
+    while (alloc_size < expect_size) {
+        alloc_size *= 2;
     }
-    logInfo("expect_size: %d, resize buff size to %d",
-            expect_size, buffer->alloc_size);
+    logInfo("expect_size: %d, resize buff size from %d to %d",
+            expect_size, buffer->alloc_size, alloc_size);
 
     new_buff = (char *)memory_manager->alloc_func(memory_manager->args,
-            buffer->alloc_size);
+            alloc_size);
     if (new_buff == NULL) {
         logError("file: "__FILE__", line: %d, "
-                "alloc %d bytes fail", __LINE__, buffer->alloc_size);
+                "alloc %d bytes fail", __LINE__, alloc_size);
         return ENOMEM;
     }
 
     memcpy(new_buff, buffer->buff, buffer->length);
     memory_manager->free_func(memory_manager->args, buffer->buff);
     buffer->buff = new_buff;
+    buffer->alloc_size = alloc_size;
     return 0;
 }
 
-char *fast_template_text2html(FastTemplateMemoryManager *
-        memory_manager, const string_t *value,
-        BufferInfo *buffer)
+int fast_template_reset_realloc_buffer(FastTemplateMemoryManager *
+        memory_manager, const int alloc_size)
 {
+    memory_manager->buffer.length = 0;
+    return check_realloc_buffer(memory_manager, alloc_size);
+}
+
+char *fast_template_text2html(FastTemplateMemoryManager *
+        memory_manager, const string_t *value, string_t *output)
+{
+    BufferInfo *buffer;
     const char *p;
     const char *end;
     char *dest;
     char *buff_end;
     int space_count;
+
+    buffer = &memory_manager->buffer;
+    if (output != NULL) {
+        buffer->length = 0;  //reset buffer length
+    }
 
     space_count = 0;
     dest = buffer->buff + buffer->length;
@@ -492,7 +518,7 @@ char *fast_template_text2html(FastTemplateMemoryManager *
     for (p=value->str; p<end; p++) {
         if (buff_end - dest < 8) {
             buffer->length = dest - buffer->buff;
-            if (check_realloc_output_buffer(memory_manager, buffer, 8) != 0) {
+            if (check_realloc_buffer(memory_manager, 8) != 0) {
                 return NULL;
             }
 
@@ -559,6 +585,10 @@ char *fast_template_text2html(FastTemplateMemoryManager *
     }
 
     buffer->length = dest - buffer->buff;
+    if (output != NULL) {
+        output->str = buffer->buff;
+        output->len = buffer->length;
+    }
     return dest;
 }
 
@@ -582,23 +612,26 @@ int fast_template_render(FastTemplateContext *context,
         void *params, const int total_value_len, const bool text2html,
         fast_template_find_param_func find_func, string_t *output)
 {
+    BufferInfo *buffer;
     int i;
     int result;
     int alloc_size;
-    BufferInfo buffer;
     string_t *value;
     string_t v;
     char *p;
     bool html_format;
 
+    buffer = &context->memory_manager.buffer;
+    buffer->length = 0;  //reset buffer length
+
     alloc_size = context->file_content.len + total_value_len;
-    if ((result=fast_template_alloc_output_buffer(&context->memory_manager,
-                    &buffer, alloc_size)) != 0)
+    if ((result=check_realloc_buffer(&context->memory_manager,
+                    alloc_size)) != 0)
     {
         return result;
     }
 
-    p = buffer.buff;
+    p = buffer->buff;
     for (i=0; i<context->node_array.count; i++) {
         if (context->node_array.nodes[i].type == FAST_TEMPLATE_NODE_TYPE_STRING) {
             value = &context->node_array.nodes[i].value;
@@ -617,32 +650,32 @@ int fast_template_render(FastTemplateContext *context,
 
         if (value->len > 0) {
             if (html_format) {
-                buffer.length = p - buffer.buff;
+                buffer->length = p - buffer->buff;
                 p = fast_template_text2html(&context->memory_manager,
-                        value, &buffer);
+                        value, NULL);
                 if (p == NULL) {
                     return ENOMEM;
                 }
             } else {
-                if ((p - buffer.buff) + value->len > buffer.alloc_size) {
-                    buffer.length = p - buffer.buff;
-                    if (check_realloc_output_buffer(&context->memory_manager,
-                                &buffer, value->len) != 0)
+                if ((p - buffer->buff) + value->len > buffer->alloc_size) {
+                    buffer->length = p - buffer->buff;
+                    if (check_realloc_buffer(&context->memory_manager,
+                                value->len) != 0)
                     {
                         return ENOMEM;
                     }
-                    p = buffer.buff + buffer.length;
+                    p = buffer->buff + buffer->length;
                 }
                 memcpy(p, value->str, value->len);
                 p += value->len;
             }
         }
     }
-    buffer.length = p - buffer.buff;
+    buffer->length = p - buffer->buff;
 
-    //logInfo("buffer length: %d, alloc_size: %d", buffer.length, buffer.alloc_size);
-    output->str = buffer.buff;
-    output->len = buffer.length;
+    //logInfo("buffer length: %d, alloc_size: %d", buffer->length, buffer->alloc_size);
+    output->str = buffer->buff;
+    output->len = buffer->length;
     return 0;
 }
 
