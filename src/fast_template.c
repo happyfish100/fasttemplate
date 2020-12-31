@@ -276,7 +276,7 @@ static int do_preprocess(FastTemplateContext *context, int *include_count)
                         - text_start)) == 0)
         {
             free(context->file_content.str);
-            context->file_content.str = fc_strdup(buffer.data, buffer.length);
+            context->file_content.str = fc_strdup1(buffer.data, buffer.length);
             context->file_content.len = buffer.length;
         }
     }
