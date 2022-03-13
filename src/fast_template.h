@@ -114,7 +114,7 @@ static inline int fast_template_render_by_htable(FastTemplateContext *context,
 {
     return fast_template_render(context, params, params->item_count * 16,
             context->text2html, (fast_template_find_param_func)
-            hash_find2, output);
+            fc_hash_find2, output);
 }
 
 static inline void fast_template_set_args(FastTemplateContext *context,

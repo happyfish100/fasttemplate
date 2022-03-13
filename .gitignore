@@ -1,0 +1,58 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dSYM
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.out
+src/template_test_kv
+src/template_test_htable
+
+# other
+*.swp
+*.swo
+php-fasttemplate/.deps
+php-fasttemplate/.libs/
+php-fasttemplate/Makefile
+php-fasttemplate/Makefile.fragments
+php-fasttemplate/Makefile.global
+php-fasttemplate/Makefile.objects
+php-fasttemplate/acinclude.m4
+php-fasttemplate/aclocal.m4
+php-fasttemplate/autom4te.cache/
+php-fasttemplate/build/
+php-fasttemplate/config.guess
+php-fasttemplate/config.h
+php-fasttemplate/config.h.in
+php-fasttemplate/config.log
+php-fasttemplate/config.nice
+php-fasttemplate/config.status
+php-fasttemplate/config.sub
+php-fasttemplate/configure
+php-fasttemplate/configure.ac
+php-fasttemplate/install-sh
+php-fasttemplate/libtool
+php-fasttemplate/ltmain.sh
+php-fasttemplate/missing
+php-fasttemplate/mkinstalldirs
+php-fasttemplate/run-tests.php

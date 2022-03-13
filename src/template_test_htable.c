@@ -18,7 +18,7 @@ void template_free_func(void *args, void *ptr)
 }
 
 #define HASH_INSERT_STRING_KV(hash, key, value) \
-    hash_insert_ex(hash, key, strlen(key), value, strlen(value), false)
+    fc_hash_insert_ex(hash, key, strlen(key), value, strlen(value), false)
 
 int main(int argc, char *argv[])
 {
@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
     }
 
     log_init();
-    if ((result=hash_init(&htable, simple_hash, 64, 1.0)) != 0) {
+    if ((result=fc_hash_init(&htable, fc_simple_hash, 64, 1.0)) != 0) {
         return result;
     }
 
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
     printf("output: %.*s\n", output.len, output.str);
     free(output.str);
     fast_template_destroy(&context);
-    hash_destroy(&htable);
+    fc_hash_destroy(&htable);
 
     return 0;
 }

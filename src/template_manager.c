@@ -16,7 +16,7 @@ int template_manager_init(TemplateManagerContext *context, void *args,
 {
     int result;
 
-    if ((result=hash_init(&context->template_htable, simple_hash,
+    if ((result=fc_hash_init(&context->template_htable, fc_simple_hash,
                     init_capacity, 0.75)) != 0)
     {
         return result;
@@ -31,7 +31,7 @@ int template_manager_init(TemplateManagerContext *context, void *args,
 
 void template_manager_destroy(TemplateManagerContext *context)
 {
-    hash_destroy(&context->template_htable);
+    fc_hash_destroy(&context->template_htable);
 }
 
 int template_manager_render(TemplateManagerContext *context,
@@ -42,7 +42,7 @@ int template_manager_render(TemplateManagerContext *context,
     int result;
     FastTemplateContext *template_context;
 
-    template_context = (FastTemplateContext *)hash_find1(
+    template_context = (FastTemplateContext *)fc_hash_find1(
             &context->template_htable, template_filename);
     if (template_context != NULL) {
         if (context->need_reload) {
@@ -82,7 +82,7 @@ int template_manager_render(TemplateManagerContext *context,
             return result;
         }
 
-        if ((result=hash_insert_ex(&context->template_htable,
+        if ((result=fc_hash_insert_ex(&context->template_htable,
                     template_filename->str, template_filename->len,
                     template_context, 0, false)) < 0)
         {
